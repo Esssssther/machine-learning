@@ -1,0 +1,702 @@
+---
+title: "Churn_Challenge_2"
+author: "Shi Shi"
+date: "10/24/2022"
+output:
+  html_document:
+    toc: yes
+    toc_depth: '3'
+    df_print: paged
+  html_notebook:
+    df_print: paged
+    toc: yes
+    toc_depth: 3
+    theme: paper
+    highlight: tango
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+## Load Libraries
+```{r,message=FALSE,warning=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(janitor)
+library(skimr)
+library(vip)
+library(kknn)
+```
+
+## Import Data
+```{r}
+Churn <- read_csv("Churn_training.csv") %>% clean_names()
+Churn %>% head()
+Churn %>% skim()
+
+churn_kaggle<- read_csv("churn_holdout.csv") %>% clean_names()
+churn_kaggle<- churn_kaggle %>%
+  mutate(senior_citizen= as.factor(senior_citizen),
+         ip_address_asn=as.factor(ip_address_asn),
+         phone_area_code=as.factor(phone_area_code))%>%
+  mutate_if(is.character,factor)
+```
+## Analyze target
+
+```{r}
+Churn_summary<- Churn %>%
+  count(churn)%>%
+  mutate(pct=n/sum(n))
+
+Churn_summary %>%
+  ggplot(aes(x=factor(churn),y=pct))+
+  geom_col()+
+  labs(title = "churn summary distribution", x= "churn", y="percentage")+
+  geom_text(aes(label=paste(round(pct*100,1),"%")), vjust=1.5, color="white")
+
+
+```
+
+## explore data
+```{r}
+Churn %>% skim_to_wide()
+Churn %>%
+  ggplot(aes(x=factor(network_speed),fill=factor(churn)))+
+  geom_bar(position = "fill")+
+  labs(title = "Churn with diff network speed", x="network speed", y="churn")
+
+Churn %>%
+  ggplot(aes(x=factor(phone_model),fill=factor(churn)))+
+  geom_bar(position = "fill")+
+  theme(axis.text.x = element_text(angle=45,hjust = 1))+
+  labs(title="Churn w diff phone_model",  x="phone model", y="churn")
+
+Churn %>%
+  group_by(paperless_billing,churn)%>%
+  summarise(n=n())%>%
+  mutate(pct=n/sum(n))%>%
+  ggplot(aes(x=reorder(paperless_billing,pct),y=n, fill=factor(churn)))+
+  geom_col(position = "fill")+
+  theme(axis.text.x = element_text(angle=45,hjust = 1))+
+  labs(title="Churn w paperless billing or not",  x="paperless billing", y="churn")
+
+#####
+Churn %>%
+  ggplot(aes(x=factor(partner),fill=factor(churn)))+
+  geom_bar(position = "fill")+
+  theme(axis.text.x = element_text(angle=45,hjust = 1))+
+  labs(title="Churn w diff partner",  x="partner", y="churn")
+
+Churn %>%
+  ggplot(aes(x=factor(phone_service),fill=factor(churn)))+
+  geom_bar(position = "fill")+
+  theme(axis.text.x = element_text(angle=45,hjust = 1))+
+  labs(title="Churn w diff phone_service",  x="phone_service", y="churn")
+
+
+Churn %>%
+  ggplot(aes(x=factor(multiple_lines),fill=factor(churn)))+
+  geom_bar(position = "fill")+
+  theme(axis.text.x = element_text(angle=45,hjust = 1))+
+  labs(title="Churn w diff multiple_lines",  x="multiple_lines", y="churn")
+
+Churn %>%
+  ggplot(aes(x=factor(streaming_plan),fill=factor(churn)))+
+  geom_bar(position = "fill")+
+  theme(axis.text.x = element_text(angle=45,hjust = 1))+
+  labs(title="Churn w diff streaming_plan",  x="streaming_plan", y="churn")
+Churn %>%
+  ggplot(aes(x=factor(mobile_hotspot),fill=factor(churn)))+
+  geom_bar(position = "fill")+
+  theme(axis.text.x = element_text(angle=45,hjust = 1))+
+  labs(title="Churn w diff mobile_hotspot",  x="mobile_hotspot", y="churn")
+
+Churn %>%
+  ggplot(aes(x=factor(wifi_calling_text),fill=factor(churn)))+
+  geom_bar(position = "fill")+
+  theme(axis.text.x = element_text(angle=45,hjust = 1))+
+  labs(title="Churn w diff wifi_calling_text",  x="wifi_calling_text", y="churn")
+
+Churn %>%
+  ggplot(aes(x=factor(online_backup),fill=factor(churn)))+
+  geom_bar(position = "fill")+
+  theme(axis.text.x = element_text(angle=45,hjust = 1))+
+  labs(title="Churn w diff online_backup",  x="online_backup", y="churn")
+
+Churn %>%
+  ggplot(aes(x=factor(device_protection),fill=factor(churn)))+
+  geom_bar(position = "fill")+
+  theme(axis.text.x = element_text(angle=45,hjust = 1))+
+  labs(title="Churn w diff device_protection",  x="device_protection", y="churn")
+Churn %>%
+  ggplot(aes(x=factor(payment_method),fill=factor(churn)))+
+  geom_bar(position = "fill")+
+  theme(axis.text.x = element_text(angle=45,hjust = 1))+
+  labs(title="Churn w diff payment_method",  x="payment_method", y="churn")
+
+Churn %>%
+  ggplot(aes(x=factor(gender),fill=factor(churn)))+
+  geom_bar(position = "fill")+
+  theme(axis.text.x = element_text(angle=45,hjust = 1))+
+  labs(title="Churn w diff gender",  x="gender", y="churn")
+
+Churn %>%
+  ggplot(aes(x=factor(email_domain),fill=factor(churn)))+
+  geom_bar(position = "fill")+
+  theme(axis.text.x = element_text(angle=45,hjust = 1))+
+  labs(title="Churn w diff email_domain",  x="email_domain", y="churn")
+
+Churn %>%
+  ggplot(aes(x=factor(contract_code),fill=factor(churn)))+
+  geom_bar(position = "fill")+
+  theme(axis.text.x = element_text(angle=45,hjust = 1))+
+  labs(title="Churn w diff contract_code",  x="contract_code", y="churn")
+  	
+Churn %>%
+  ggplot(aes(x=factor(currency_code),fill=factor(churn)))+
+  geom_bar(position = "fill")+
+  theme(axis.text.x = element_text(angle=45,hjust = 1))+
+  labs(title="Churn w diff currency_code",  x="currency_code", y="churn")
+
+Churn %>% 
+  ggplot(aes(x=factor(churn),y=monthly_minutes))+
+  geom_boxplot()+
+  labs(title="Churn w diff monthly_minutes",  y="monthly_minutes", x="churn")
+
+Churn %>% 
+  ggplot(aes(x=factor(churn),y=streaming_minutes))+
+  geom_boxplot()+
+  labs(title="Churn w diff streaming_minutes",  y="streaming_minutes", x="churn")
+
+Churn %>% 
+  ggplot(aes(x=factor(churn),y=total_billed))+
+  geom_boxplot()+
+  labs(title="Churn w diff total_billed",  y="total_billed", x="churn")
+
+Churn %>% 
+  ggplot(aes(x=factor(churn),y=prev_balance))+
+  geom_boxplot()+
+  labs(title="Churn w diff prev_balance",  y="prev_balance", x="churn")
+Churn %>%
+  ggplot(aes(x=factor(churn),y=customer_service_calls))+
+  geom_boxplot()+
+  labs(title="Churn w diff customer_service_calls",  y="customer_service_calls", x="churn")
+Churn %>%
+  ggplot(aes(x=factor(churn),y=late_payments))+
+  geom_boxplot()+
+  labs(title="Churn w diff late_payments",  y="late_payments", x="churn")
+Churn %>%
+  ggplot(aes(x=factor(churn),y=number_phones))+
+  geom_boxplot()+
+  labs(title="Churn w diff number_phones",  y="number_phones", x="churn")
+
+
+
+```
+
+
+## Prepare data 
+```{r}
+churn_prep<-Churn %>%
+  mutate(churn=as.factor(churn),
+         senior_citizen= as.factor(senior_citizen),
+         ip_address_asn=as.factor(ip_address_asn),
+         phone_area_code=as.factor(phone_area_code))%>%
+  mutate_if(is.character,factor)
+
+skim(churn_prep)
+```
+
+## split data
+```{r}
+set.seed(15)
+train_test_split <- initial_split(churn_prep,prop = 0.8)
+train<- training(train_test_split)
+test<- testing(train_test_split)
+```
+
+## Define Recipe 
+```{r}
+
+logistic_recipe_19<-recipe(churn ~ total_billed+payment_method+number_phones+streaming_minutes+streaming_plan+prev_balance+monthly_minutes+paperless_billing+partner+multiple_lines+customer_service_calls+mobile_hotspot+gender+late_payments+phone_model+device_protection+email_domain+contract_code+currency_code, data = train ) %>%
+  step_impute_median(all_numeric_predictors())%>%
+  step_unknown(all_nominal_predictors())%>%
+  step_novel(all_nominal_predictors()) %>%
+  step_scale(all_numeric_predictors())%>%
+  step_dummy(all_nominal_predictors())
+
+logistic_recipe_14<-recipe(churn ~ monthly_minutes+customer_service_calls+streaming_minutes+total_billed+prev_balance+late_payments+phone_model+partner+phone_service+multiple_lines+streaming_plan+mobile_hotspot+wifi_calling_text+number_phones+paperless_billing+payment_method+gender+network_speed, data = train ) %>%
+  step_impute_median(all_numeric_predictors())%>%
+  step_unknown(all_nominal_predictors())%>%
+  step_novel(all_nominal_predictors()) %>%
+  step_scale(all_numeric_predictors())%>%
+  step_dummy(all_nominal_predictors())
+```
+
+## logistic_bake_12
+```{r}
+logistic_model <- logistic_reg() %>%
+  set_mode("classification") %>%
+  set_engine("glm")
+  
+logistic_workflow_2 <- workflow() %>%
+  add_recipe(logistic_recipe_19) %>%
+  add_model(logistic_model) %>%
+  fit(train)
+
+scored_train_logit_2 <- predict(logistic_workflow_2, train, type = "prob") %>%
+  bind_cols(predict(logistic_workflow_2,train,type = "class"))%>%
+  bind_cols(.,train)
+
+scored_test_logit_2 <- predict(logistic_workflow_2, test, type = "prob") %>%
+  bind_cols(predict(logistic_workflow_2,test,type = "class"))%>%
+  bind_cols(.,test)
+  
+  
+options(yardstick.event_first = FALSE)
+  # -- Metrics: Train and Test 
+scored_train_logit_2 %>% 
+  metrics(churn, .pred_1, estimate = .pred_class) %>%
+  mutate(part="training") %>%
+  bind_rows( scored_test_logit_2 %>% 
+               metrics(churn, .pred_1, estimate = .pred_class) %>%
+               mutate(part="testing") ) %>%
+  filter(.metric %in% c('accuracy','roc_auc')) %>%
+  pivot_wider(names_from = .metric, values_from=.estimate)
+
+scored_train_logit_2 %>%
+  yardstick::precision(churn,.pred_class) %>%
+  mutate(part="training") %>%
+  bind_rows(
+  scored_test_logit_2 %>%
+  yardstick::precision(churn,.pred_class) %>%
+    mutate(part="testing") 
+  )
+
+scored_train_logit_2 %>%
+  yardstick::recall(churn,.pred_class) %>%
+  mutate(part="training") %>%
+  bind_rows(
+  scored_test_logit_2 %>%
+  yardstick::recall(churn,.pred_class) %>%
+    mutate(part="testing") 
+  )
+
+
+scored_train_logit_2 %>%
+  conf_mat(
+  truth = churn,
+  estimate = .pred_class,
+  dnn = c("Prediction", "Truth")
+) %>%
+  autoplot(type = "heatmap") + 
+  labs(title="Training Confusion Matrix")
+
+scored_test_logit_2 %>%
+  conf_mat(
+  truth = churn,
+  estimate = .pred_class,
+  dnn = c("Prediction", "Truth")
+) %>%
+  autoplot(type = "heatmap") + 
+  labs(title="Testing Confusion Matrix")
+  
+logistic_workflow_2 %>%
+ pull_workflow_fit() %>%
+  tidy() %>%
+  mutate_if(is.numeric,round,2)
+
+logistic_workflow_2 %>%
+  pull_workflow_fit() %>%
+  vip()
+
+######
+logistic_model <- logistic_reg() %>%
+  set_mode("classification") %>%
+  set_engine("glm")
+  
+logistic_workflow_3 <- workflow() %>%
+  add_recipe(logistic_recipe_14) %>%
+  add_model(logistic_model) %>%
+  fit(train)
+
+scored_train_logit_3 <- predict(logistic_workflow_3, train, type = "prob") %>%
+  bind_cols(predict(logistic_workflow_3,train,type = "class"))%>%
+  bind_cols(.,train)
+
+scored_test_logit_3 <- predict(logistic_workflow_3, test, type = "prob") %>%
+  bind_cols(predict(logistic_workflow_3,test,type = "class"))%>%
+  bind_cols(.,test)
+  
+  
+options(yardstick.event_first = FALSE)
+  # -- Metrics: Train and Test 
+scored_train_logit_3 %>% 
+  metrics(churn, .pred_1, estimate = .pred_class) %>%
+  mutate(part="training") %>%
+  bind_rows( scored_test_logit_3 %>% 
+               metrics(churn, .pred_1, estimate = .pred_class) %>%
+               mutate(part="testing") ) %>%
+  filter(.metric %in% c('accuracy','roc_auc')) %>%
+  pivot_wider(names_from = .metric, values_from=.estimate)
+  
+logistic_workflow_3 %>%
+ pull_workflow_fit() %>%
+  tidy() %>%
+  mutate_if(is.numeric,round,2)
+
+logistic_workflow_3 %>%
+  pull_workflow_fit() %>%
+  vip()
+
+```
+
+```{r}
+scored_train_logit_3 %>%
+  yardstick::precision(churn,.pred_class) %>%
+  mutate(part="training") %>%
+  bind_rows(
+  scored_test_logit_3 %>%
+  yardstick::precision(churn,.pred_class) %>%
+    mutate(part="testing") 
+  )
+
+scored_train_logit_3 %>%
+  yardstick::recall(churn,.pred_class) %>%
+  mutate(part="training") %>%
+  bind_rows(
+  scored_test_logit_3 %>%
+  yardstick::recall(churn,.pred_class) %>%
+    mutate(part="testing") 
+  )
+
+
+scored_train_logit_3 %>%
+  conf_mat(
+  truth = churn,
+  estimate = .pred_class,
+  dnn = c("Prediction", "Truth")
+) %>%
+  autoplot(type = "heatmap") + 
+  labs(title="Training Confusion Matrix")
+
+scored_test_logit_3 %>%
+  conf_mat(
+  truth = churn,
+  estimate = .pred_class,
+  dnn = c("Prediction", "Truth")
+) %>%
+  autoplot(type = "heatmap") + 
+  labs(title="Testing Confusion Matrix")
+```
+
+```{r}
+scored_kaggle<- predict(logistic_workflow_3, churn_kaggle,type="class") %>%
+  bind_cols(.,churn_kaggle)%>%
+  select(customer_id , churn=.pred_class)
+
+scored_kaggle %>%
+  write_csv("logistic_0.9676.csv")
+```
+
+
+```{r}
+knn_recipe<-recipe(churn ~ monthly_minutes+customer_service_calls+streaming_minutes+total_billed+prev_balance+late_payments+phone_model+partner+phone_service+multiple_lines+streaming_plan+mobile_hotspot+wifi_calling_text+number_phones+paperless_billing+payment_method+gender+network_speed, data = train ) %>%
+  step_impute_median(all_numeric_predictors())%>%
+  step_unknown(all_nominal_predictors())%>%
+  step_novel(all_nominal_predictors()) %>%
+  step_scale(all_numeric_predictors())%>%
+  step_dummy(all_nominal_predictors())
+```
+
+
+## Bake
+```{r}
+knn_bake<-bake(knn_recipe %>% prep(), train, composition = "tibble")
+knn_bake
+```
+
+## Define Model
+```{r}
+knn_model <- nearest_neighbor(neighbors = 10 ) %>%
+  set_mode("classification")%>%
+  set_engine("kknn")
+
+knn_model
+```
+```{r}
+knn_workflow_churn <- workflow()%>%
+  add_recipe(knn_recipe) %>%
+  add_model(knn_model)
+
+knn_fit_churn <- knn_workflow_churn %>%
+  fit(data=train)
+
+knn_fit_churn
+```
+
+
+
+## Scoreing train & test
+```{r}
+scored_train <- predict(knn_fit_churn,train, type = "prob") %>%
+  bind_cols(predict(knn_fit_churn,train,type = "class"))%>%
+  bind_cols(.,train)
+
+scored_test <- predict(knn_fit_churn, test, type = "prob") %>%
+  bind_cols(predict(knn_fit_churn,test,type = "class"))%>%
+  bind_cols(.,test)
+
+```
+
+
+### Metrics
+```{r}
+options(yardstick.event_first = FALSE)
+  # -- Metrics: Train and Test 
+scored_train %>% 
+  metrics(churn, .pred_1, estimate = .pred_class) %>%
+  mutate(part="training") %>%
+  bind_rows( scored_test %>% 
+               metrics(churn, .pred_1, estimate = .pred_class) %>%
+               mutate(part="testing") ) %>%
+  filter(.metric %in% c('accuracy','roc_auc')) %>%
+  pivot_wider(names_from = .metric, values_from=.estimate)
+  
+scored_train %>%
+  yardstick::precision(churn,.pred_class) %>%
+  mutate(part="training") %>%
+  bind_rows(
+  scored_test %>%
+  yardstick::precision(churn,.pred_class) %>%
+    mutate(part="testing") 
+  )
+
+scored_train %>%
+  yardstick::recall(churn,.pred_class) %>%
+  mutate(part="training") %>%
+  bind_rows(
+  scored_test %>%
+  yardstick::recall(churn,.pred_class) %>%
+    mutate(part="testing") 
+  )
+
+
+scored_train %>%
+  conf_mat(
+  truth = churn,
+  estimate = .pred_class,
+  dnn = c("Prediction", "Truth")
+) %>%
+  autoplot(type = "heatmap") + 
+  labs(title="Training Confusion Matrix")
+
+scored_test %>%
+  conf_mat(
+  truth = churn,
+  estimate = .pred_class,
+  dnn = c("Prediction", "Truth")
+) %>%
+  autoplot(type = "heatmap") + 
+  labs(title="Testing Confusion Matrix")
+```
+
+```{r}
+scored_kaggle<- predict(knn_fit_churn, churn_kaggle,type="class") %>%
+  bind_cols(.,churn_kaggle)%>%
+  select(customer_id , churn=.pred_class)
+
+scored_kaggle %>%
+  write_csv("logistic_0.973.csv")
+```
+
+
+###logistic regression lasso
+
+```{r}
+lasso_spec <- logistic_reg(penalty = 0.01, mixture = 1) %>%
+  set_mode("classification") %>%
+  set_engine("glmnet")
+```
+
+```{r}
+lasso_workflow <- workflow() %>%
+  add_recipe(logistic_recipe_19) %>%
+  add_model(lasso_spec) %>%
+  fit(train)
+```
+
+```{r}
+scored_train_lasso <- predict(lasso_workflow, train, type = "prob") %>%
+  bind_cols(predict(lasso_workflow,train,type = "class"))%>%
+  bind_cols(.,train)
+
+scored_test_lasso <- predict(lasso_workflow, test, type = "prob") %>%
+  bind_cols(predict(lasso_workflow,test,type = "class"))%>%
+  bind_cols(.,test)
+```
+
+```{r}
+options(yardstick.event_first = FALSE)
+  # -- Metrics: Train and Test 
+scored_train_lasso %>% 
+  metrics(churn, .pred_1, estimate = .pred_class) %>%
+  mutate(part="training") %>%
+  bind_rows( scored_test_lasso %>% 
+               metrics(churn, .pred_1, estimate = .pred_class) %>%
+               mutate(part="testing") ) %>%
+  filter(.metric %in% c('accuracy','roc_auc')) %>%
+  pivot_wider(names_from = .metric, values_from=.estimate)
+
+lasso_workflow %>%
+ pull_workflow_fit() %>%
+  tidy() %>%
+  mutate_if(is.numeric,round,2)
+
+lasso_workflow %>%
+  pull_workflow_fit() %>%
+  vip()
+
+scored_train_lasso %>%
+  yardstick::precision(churn,.pred_class) %>%
+  mutate(part="training") %>%
+  bind_rows(
+  scored_test_lasso %>%
+  yardstick::precision(churn,.pred_class) %>%
+    mutate(part="testing") 
+  )
+
+scored_train_lasso %>%
+  yardstick::recall(churn,.pred_class) %>%
+  mutate(part="training") %>%
+  bind_rows(
+  scored_test_lasso %>%
+  yardstick::recall(churn,.pred_class) %>%
+    mutate(part="testing") 
+  )
+
+
+scored_train_lasso %>%
+  conf_mat(
+  truth = churn,
+  estimate = .pred_class,
+  dnn = c("Prediction", "Truth")
+) %>%
+  autoplot(type = "heatmap") + 
+  labs(title="Training Confusion Matrix")
+
+scored_test_lasso %>%
+  conf_mat(
+  truth = churn,
+  estimate = .pred_class,
+  dnn = c("Prediction", "Truth")
+) %>%
+  autoplot(type = "heatmap") + 
+  labs(title="Testing Confusion Matrix")
+```
+
+### decision tree
+```{r}
+library(caret)
+set.seed(44)
+treemod2<-train(churn~.,data=knn_bake,
+                method="rpart",
+                trControl=trainControl("cv",number=10),
+                tuneLength=10,
+                na.action=na.omit)
+plot(treemod2)
+treemod2$bestTune
+```
+
+```{r}
+tree<- decision_tree(mode = "classification", cost_complexity = 0.003, tree_depth = 10 , min_n =3)%>% #based on kcv
+  set_engine("rpart")%>%
+  fit(churn~.,data=knn_bake)
+
+tree$fit
+options(scipen=0)
+```
+
+```{r}
+# -- training 
+predict(tree, knn_bake, type = "prob") %>%
+  bind_cols(.,predict(tree, knn_bake)) %>%
+  bind_cols(.,knn_bake) -> scored_train_tree
+
+head(scored_train_tree)
+
+bake_test<-bake(knn_recipe %>% prep(), test, composition = "tibble")
+
+# -- testing 
+predict(tree, bake_test, type = "prob") %>%
+  bind_cols(.,predict(tree, bake_test)) %>%
+  bind_cols(.,bake_test) -> scored_test_tree
+
+head(scored_test_tree)
+```
+
+```{r}
+# -- AUC: Train and Test 
+scored_train_tree %>% 
+  metrics(churn, .pred_1, estimate = .pred_class) %>%
+  mutate(part="training") %>%
+  bind_rows( scored_test_tree %>% 
+               metrics(churn, .pred_1, estimate = .pred_class) %>%
+               mutate(part="testing") 
+  ) 
+  
+scored_train_tree %>%
+  yardstick::precision(churn,.pred_class) %>%
+  mutate(part="training") %>%
+  bind_rows(
+  scored_test_tree %>%
+  yardstick::precision(churn,.pred_class) %>%
+    mutate(part="testing") 
+  )
+
+scored_train_tree %>%
+  yardstick::recall(churn,.pred_class) %>%
+  mutate(part="training") %>%
+  bind_rows(
+  scored_test_tree %>%
+  yardstick::recall(churn,.pred_class) %>%
+    mutate(part="testing") 
+  )
+
+# -- Variable Importance top 10 features  
+tree %>%
+  vip(num_features = 5)
+
+# -- ROC Charts 
+scored_train_tree %>%
+  mutate(model = "train") %>%
+  bind_rows(scored_test_tree %>%
+              mutate(model="test")) %>%
+  group_by(model) %>%
+  roc_curve(churn, .pred_1) %>%
+  autoplot()
+
+
+# -- Confustion Matricies  
+scored_train_tree %>%
+  conf_mat(churn, .pred_class) %>%
+  autoplot( type = "heatmap") +
+  labs(title="Train Confusion Matrix")
+
+scored_test_tree %>%
+  conf_mat(churn, .pred_class) %>%
+  autoplot( type = "heatmap") +
+  labs(title="Test Confusion Matrix")
+
+
+
+```
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
